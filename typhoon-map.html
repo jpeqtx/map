@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typhoon Circles</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin:0; }
+        #map { width:100vw; height:100vh; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        const map = L.map('map').setView([35, 135], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 18
+        }).addTo(map);
+
+        const params = new URLSearchParams(window.location.search);
+        const lat = parseFloat(params.get('lat'));
+        const lng = parseFloat(params.get('lng'));
+        const storm = parseFloat(params.get('storm'));
+        const gale = parseFloat(params.get('gale'));
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+            map.setView([lat, lng], 7);
+            L.marker([lat, lng]).addTo(map).bindPopup('Typhoon Center');
+
+            if (!isNaN(gale) && gale > 0) {
+                L.circle([lat, lng], {
+                    radius: gale * 1000,
+                    color: 'orange',
+                    fillOpacity: 0.15
+                }).addTo(map).bindPopup(`Gale area: ${gale} km radius`);
+            }
+
+            if (!isNaN(storm) && storm > 0) {
+                L.circle([lat, lng], {
+                    radius: storm * 1000,
+                    color: 'red',
+                    fillOpacity: 0.25
+                }).addTo(map).bindPopup(`Storm area: ${storm} km radius`);
+            }
+        } else {
+            alert('Please provide lat, lng, and optionally storm/gale in km as URL parameters.');
+        }
+    </script>
+</body>
+</html>
