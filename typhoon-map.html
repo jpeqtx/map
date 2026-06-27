@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Typhoon Wind Areas</title>
+    <title>Typhoon Circles</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -20,91 +20,33 @@
             maxZoom: 18
         }).addTo(map);
 
-        // 方位略号 → 方位角（度）
-        const DIR_TO_ANGLE = {
-            'N':0, 'NNE':22.5, 'NE':45, 'ENE':67.5,
-            'E':90, 'ESE':112.5, 'SE':135, 'SSE':157.5,
-            'S':180, 'SSW':202.5, 'SW':225, 'WSW':247.5,
-            'W':270, 'WNW':292.5, 'NW':315, 'NNW':337.5
-        };
-
-        // パラメータ取得
         const params = new URLSearchParams(window.location.search);
         const lat = parseFloat(params.get('lat'));
         const lng = parseFloat(params.get('lng'));
-        if (isNaN(lat) || isNaN(lng)) {
-            alert('Please provide lat and lng parameters.');
-            throw new Error('Missing coordinates');
-        }
-        map.setView([lat, lng], 7);
-        L.marker([lat, lng]).addTo(map).bindPopup('Typhoon Center');
+        const storm = parseFloat(params.get('storm')); // km
+        const gale = parseFloat(params.get('gale'));   // km
 
-        // 方向別半径のパース関数
-        function parseAxes(param) {
-            if (!param) return [];
-            const axes = [];
-            const parts = param.split(',');
-            for (const part of parts) {
-                const [dir, r] = part.split(':');
-                const radius = parseFloat(r);
-                if (DIR_TO_ANGLE[dir] !== undefined && !isNaN(radius)) {
-                    axes.push({ angle: DIR_TO_ANGLE[dir], radius: radius * 1000 }); // km -> m
-                }
+        if (!isNaN(lat) && !isNaN(lng)) {
+            map.setView([lat, lng], 7);
+            L.marker([lat, lng]).addTo(map).bindPopup('Typhoon Center');
+
+            if (!isNaN(gale) && gale > 0) {
+                L.circle([lat, lng], {
+                    radius: gale * 1000, // convert km to meters
+                    color: 'orange',
+                    fillOpacity: 0.15
+                }).addTo(map).bindPopup(`Gale area: ${gale} km radius`);
             }
-            return axes;
-        }
 
-        // 補間多角形の生成
-        function createPolygon(center, axes, color, fillOpacity) {
-            if (axes.length === 0) return null;
-            // 方位角でソート（0°～360°）
-            axes.sort((a, b) => a.angle - b.angle);
-            // 360°を超えて閉じるために先頭の点を末尾に追加（+360°として扱う）
-            const extended = axes.concat([{ angle: axes[0].angle + 360, radius: axes[0].radius }]);
-
-            const points = [];
-            const latLngCenter = L.latLng(center[0], center[1]);
-            // 補間の点数（全周360°を1°刻みで）
-            for (let a = 0; a < 360; a++) {
-                let angle = a;
-                // どの区間かを探す
-                let seg = 0;
-                while (seg < extended.length - 1 && angle > extended[seg + 1].angle) seg++;
-                const prev = extended[seg];
-                const next = extended[seg + 1];
-                // 線形補間
-                const t = (angle - prev.angle) / (next.angle - prev.angle);
-                const r = prev.radius + t * (next.radius - prev.radius);
-                // 方位角から地点を計算（簡易的な平面近似だが、短距離なので十分）
-                const rad = angle * Math.PI / 180;
-                const dx = r * Math.sin(rad); // 経度方向（東西）
-                const dy = r * Math.cos(rad); // 緯度方向（南北）
-                // 緯度経度に変換（地球の曲率を簡易補正）
-                const lat2 = lat + (dy / 111000); // 1度 ≒ 111km
-                const lng2 = lng + (dx / (111000 * Math.cos(lat * Math.PI / 180)));
-                points.push([lat2, lng2]);
+            if (!isNaN(storm) && storm > 0) {
+                L.circle([lat, lng], {
+                    radius: storm * 1000,
+                    color: 'red',
+                    fillOpacity: 0.25
+                }).addTo(map).bindPopup(`Storm area: ${storm} km radius`);
             }
-            // 多角形を閉じる
-            points.push(points[0]);
-            return L.polygon(points, {
-                color: color,
-                fillOpacity: fillOpacity,
-                weight: 2
-            });
-        }
-
-        // 強風域の描画
-        const galeAxes = parseAxes(params.get('gale'));
-        if (galeAxes.length > 0) {
-            const galePoly = createPolygon([lat, lng], galeAxes, 'orange', 0.15);
-            if (galePoly) galePoly.addTo(map);
-        }
-
-        // 暴風域の描画
-        const stormAxes = parseAxes(params.get('storm'));
-        if (stormAxes.length > 0) {
-            const stormPoly = createPolygon([lat, lng], stormAxes, 'red', 0.25);
-            if (stormPoly) stormPoly.addTo(map);
+        } else {
+            alert('Please provide lat, lng, and optionally storm/gale in km as URL parameters.');
         }
     </script>
 </body>
