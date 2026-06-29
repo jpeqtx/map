@@ -59,7 +59,7 @@
         const storm = parseFloat(params.get('storm'));
         const gale = parseFloat(params.get('gale'));
         const type = params.get('type');
-        const isEpicenter = (type === 'epicenter') || (!storm && !gale);
+        const isEpicenter = (type === 'epicenter');
 
         document.title = isEpicenter ? 'Epicenter' : 'Typhoon Wind Areas';
 
