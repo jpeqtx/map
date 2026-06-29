@@ -29,18 +29,20 @@
             margin-right: 8px;
             border: 1px solid #666;
         }
-        /* Leaflet カスタムコントロール用のスタイル */
-        .osm-attribution-control {
+        .osm-attribution {
+            position: absolute;
+            top: 0;
+            right: 0;
             background: rgba(255,255,255,0.9);
             padding: 2px 6px;
             font-size: 10px;
             font-family: sans-serif;
+            z-index: 1002;
             border-radius: 0 0 0 3px;
             box-shadow: 0 0 3px rgba(0,0,0,0.3);
             line-height: 1.4;
-            white-space: nowrap;
         }
-        .osm-attribution-control a {
+        .osm-attribution a {
             color: #0078d4;
             text-decoration: none;
         }
@@ -48,6 +50,9 @@
 </head>
 <body>
     <div id="map"></div>
+    <div class="osm-attribution">
+        &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors
+    </div>
     <div class="legend" id="legend" style="display:none;">
         <div class="legend-item"><div class="legend-color" style="background:rgba(255,0,0,0.5);"></div> Storm Area</div>
         <div class="legend-item"><div class="legend-color" style="background:rgba(255,165,0,0.4);"></div> Gale Area</div>
@@ -59,7 +64,9 @@
         const storm = parseFloat(params.get('storm'));
         const gale = parseFloat(params.get('gale'));
         const type = params.get('type');
-        const isEpicenter = (type === 'epicenter');
+
+        // type=epicenter または type=ep → 震央、それ以外（type=ty / 未指定 等）→ 台風
+        const isEpicenter = (type === 'epicenter' || type === 'ep');
 
         document.title = isEpicenter ? 'Epicenter' : 'Typhoon Wind Areas';
 
@@ -70,19 +77,6 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18
         }).addTo(map);
-
-        // ★ Leaflet カスタムコントロールとして右上に配置
-        const OsmAttribution = L.Control.extend({
-            options: {
-                position: 'topright'
-            },
-            onAdd: function (map) {
-                const div = L.DomUtil.create('div', 'osm-attribution-control');
-                div.innerHTML = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors';
-                return div;
-            }
-        });
-        new OsmAttribution().addTo(map);
 
         if (!isNaN(lat) && !isNaN(lng)) {
             map.setView([lat, lng], 7);
