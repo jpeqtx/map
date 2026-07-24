@@ -124,10 +124,10 @@
                 if (dir && !isNaN(spd) && spd > 0) {
                     const angle = directionToAngle(dir);
                     // Place arrow slightly offset from center to avoid overlap with marker
-                    const arrowLat = lat + 0.03; // about 3.3km north
+                    const arrowLat = lat + 0.02; // about 2.2km north
                     const arrowLng = lng;
                     const arrowIcon = createArrowIcon(angle);
-                    const arrowMarker = L.marker([arrowLat, arrowLng], { icon: arrowIcon }).addTo(map);
+                    const arrowMarker = L.marker([arrowLat, arrowLng], { icon: arrowIcon, zIndexOffset: 1000 }).addTo(map);
                     arrowMarker.bindPopup(`Movement: ${dir} ${spd} km/h`);
                 }
 
