@@ -64,6 +64,11 @@
             animation: ripple 2s ease-out infinite;
             transform-origin: center center;
         }
+
+        /* 矢印を最前面に */
+        .arrow-icon {
+            z-index: 1000 !important;
+        }
     </style>
 </head>
 <body>
@@ -84,7 +89,7 @@
         const type = params.get('type');
         const dir = params.get('dir');
         const spd = parseFloat(params.get('spd'));
-        const mag = parseFloat(params.get('mag'));  // マグニチュード
+        const mag = parseFloat(params.get('mag'));
 
         const isEpicenter = (type === 'epicenter' || type === 'ep');
 
@@ -113,14 +118,14 @@
             });
         }
 
-        // --- マグニチュード → 色（対数スケール、赤(高M) → 青(低M)） ---
+        // --- マグニチュード → 色（対数スケール） ---
         function magnitudeColor(m) {
             const M_MIN = 2.0;
             const M_MAX = 9.0;
             let t = (Math.log10(m) - Math.log10(M_MIN)) /
                     (Math.log10(M_MAX) - Math.log10(M_MIN));
             t = Math.max(0, Math.min(1, t));
-            const hue = 240 * (1 - t);   // 0=赤, 240=青
+            const hue = 240 * (1 - t);
             return `hsl(${hue}, 100%, 50%)`;
         }
 
@@ -128,10 +133,9 @@
         function createRippleIcon(magnitude) {
             const baseRadius = 10;
             const scaleFactor = 8;
-            // マグニチュードに比例（対数ではないが、あまり極端にしないため比例で十分）
             const radius = baseRadius + scaleFactor * (magnitude - 2);
             const maxScale = 2.5;
-            const size = Math.ceil(radius * 2 * maxScale); // アニメーションで拡大しきったときの直径
+            const size = Math.ceil(radius * 2 * maxScale);
             const color = magnitudeColor(magnitude);
 
             return L.divIcon({
@@ -148,6 +152,21 @@
                 iconSize: [size, size],
                 iconAnchor: [size/2, size/2]
             });
+        }
+
+        // --- 地図上の距離から円周上の座標を計算 ---
+        function destinationFromBearing(centerLat, centerLng, radiusMeters, bearingDeg) {
+            const R = 6371000; // 地球の半径(m)
+            const lat1 = centerLat * Math.PI / 180;
+            const lng1 = centerLng * Math.PI / 180;
+            const brng = bearingDeg * Math.PI / 180;
+            const d = radiusMeters / R;
+
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) +
+                                   Math.cos(lat1) * Math.sin(d) * Math.cos(brng));
+            const lng2 = lng1 + Math.atan2(Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+                                          Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+            return [lat2 * 180 / Math.PI, lng2 * 180 / Math.PI];
         }
 
         // --- マップ初期化 ---
@@ -170,7 +189,7 @@
                     offset: [0, -10]
                 });
 
-                // --- 波紋アニメーション ---
+                // 波紋アニメーション
                 if (!isNaN(mag) && mag > 0) {
                     const rippleIcon = createRippleIcon(mag);
                     L.marker([lat, lng], {
@@ -180,6 +199,7 @@
                     }).addTo(map);
                 }
             } else {
+                // --- 台風モード ---
                 marker.bindTooltip('Near the center of the typhoon', {
                     permanent: true,
                     direction: 'top',
@@ -187,24 +207,27 @@
                 });
                 marker.bindPopup('Typhoon Center');
 
+                // 進行方向の矢印
                 if (dir && !isNaN(spd) && spd > 0) {
                     const angle = directionToAngle(dir);
                     const arrowLat = lat - 0.05;
                     const arrowLng = lng;
                     const arrowIcon = createArrowIcon(angle);
-                    const arrowMarker = L.marker([arrowLat, arrowLng], { 
-                        icon: arrowIcon, 
+                    const arrowMarker = L.marker([arrowLat, arrowLng], {
+                        icon: arrowIcon,
                         zIndexOffset: 1000
                     }).addTo(map);
                     arrowMarker.bindPopup(`Movement: ${dir} ${spd} km/h`);
                 }
 
+                // --- 静的円（正確な暴風域・強風域） ---
                 let hasCircles = false;
                 if (!isNaN(gale) && gale > 0) {
                     L.circle([lat, lng], {
                         radius: gale * 1000,
                         color: 'orange',
-                        fillOpacity: 0.15
+                        fillOpacity: 0.15,
+                        weight: 2
                     }).addTo(map).bindPopup(`Gale Area: ${gale} km radius`);
                     hasCircles = true;
                 }
@@ -212,13 +235,65 @@
                     L.circle([lat, lng], {
                         radius: storm * 1000,
                         color: 'red',
-                        fillOpacity: 0.25
+                        fillOpacity: 0.25,
+                        weight: 2
                     }).addTo(map).bindPopup(`Storm Area: ${storm} km radius`);
                     hasCircles = true;
                 }
                 if (hasCircles) {
                     document.getElementById('legend').style.display = 'block';
                 }
+
+                // --- 光点周回アニメーション ---
+                const orbitingDots = [];
+
+                function createOrbitingDots(radiusKm, color, count, speedDegPerSec, offsetPhaseDeg) {
+                    const radiusMeters = radiusKm * 1000;
+                    const dots = [];
+                    for (let i = 0; i < count; i++) {
+                        const dot = L.circleMarker([0, 0], {
+                            radius: 4,
+                            color: color,
+                            fillColor: color,
+                            fillOpacity: 0.8,
+                            weight: 1.5,
+                            interactive: false,
+                            zIndexOffset: 300
+                        }).addTo(map);
+                        dots.push({
+                            marker: dot,
+                            phaseDeg: offsetPhaseDeg + (360 / count) * i
+                        });
+                    }
+                    return { dots, radiusMeters, speedDegPerSec };
+                }
+
+                // 強風域の光点（オレンジ、4個、15度/秒）
+                if (!isNaN(gale) && gale > 0) {
+                    const galeOrbit = createOrbitingDots(gale, 'orange', 4, 15, 0);
+                    orbitingDots.push(galeOrbit);
+                }
+                // 暴風域の光点（赤、3個、20度/秒）
+                if (!isNaN(storm) && storm > 0) {
+                    const stormOrbit = createOrbitingDots(storm, 'red', 3, 20, 60);
+                    orbitingDots.push(stormOrbit);
+                }
+
+                // アニメーションループ
+                let lastTime = performance.now();
+                function animateOrbits(now) {
+                    const dt = (now - lastTime) / 1000; // 秒
+                    lastTime = now;
+                    for (const orbit of orbitingDots) {
+                        for (const dotInfo of orbit.dots) {
+                            dotInfo.phaseDeg = (dotInfo.phaseDeg + orbit.speedDegPerSec * dt) % 360;
+                            const newPos = destinationFromBearing(lat, lng, orbit.radiusMeters, dotInfo.phaseDeg);
+                            dotInfo.marker.setLatLng(newPos);
+                        }
+                    }
+                    requestAnimationFrame(animateOrbits);
+                }
+                requestAnimationFrame(animateOrbits);
             }
         } else {
             alert('Please provide lat and lng as URL parameters.');
