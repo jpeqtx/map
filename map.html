@@ -46,6 +46,24 @@
             color: #0078d4;
             text-decoration: none;
         }
+
+        /* --- 波紋アニメーション用 CSS --- */
+        @keyframes ripple {
+            0%   { transform: scale(0.5); opacity: 0.8; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .ripple-container {
+            overflow: visible !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        .ripple-circle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: ripple 2s ease-out infinite;
+            transform-origin: center center;
+        }
     </style>
 </head>
 <body>
@@ -64,14 +82,15 @@
         const storm = parseFloat(params.get('storm'));
         const gale = parseFloat(params.get('gale'));
         const type = params.get('type');
-        const dir = params.get('dir');   // e.g., "NNE"
-        const spd = parseFloat(params.get('spd')); // speed in km/h
+        const dir = params.get('dir');
+        const spd = parseFloat(params.get('spd'));
+        const mag = parseFloat(params.get('mag'));  // マグニチュード
 
         const isEpicenter = (type === 'epicenter' || type === 'ep');
 
         document.title = isEpicenter ? 'Epicenter' : 'Typhoon Wind Areas';
 
-        // direction string -> angle (degrees, 0=N, clockwise)
+        // --- 進行方向 → 角度 ---
         function directionToAngle(dirStr) {
             const dirMap = {
                 'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
@@ -94,6 +113,44 @@
             });
         }
 
+        // --- マグニチュード → 色（対数スケール、赤(高M) → 青(低M)） ---
+        function magnitudeColor(m) {
+            const M_MIN = 2.0;
+            const M_MAX = 9.0;
+            let t = (Math.log10(m) - Math.log10(M_MIN)) /
+                    (Math.log10(M_MAX) - Math.log10(M_MIN));
+            t = Math.max(0, Math.min(1, t));
+            const hue = 240 * (1 - t);   // 0=赤, 240=青
+            return `hsl(${hue}, 100%, 50%)`;
+        }
+
+        // --- 波紋アイコン生成 ---
+        function createRippleIcon(magnitude) {
+            const baseRadius = 10;
+            const scaleFactor = 8;
+            // マグニチュードに比例（対数ではないが、あまり極端にしないため比例で十分）
+            const radius = baseRadius + scaleFactor * (magnitude - 2);
+            const maxScale = 2.5;
+            const size = Math.ceil(radius * 2 * maxScale); // アニメーションで拡大しきったときの直径
+            const color = magnitudeColor(magnitude);
+
+            return L.divIcon({
+                className: 'ripple-container',
+                html: `<div class="ripple-circle" style="
+                    width:${radius*2}px;
+                    height:${radius*2}px;
+                    left:${size/2 - radius}px;
+                    top:${size/2 - radius}px;
+                    background:${color};
+                    opacity:0.3;
+                    border:2px solid ${color};
+                "></div>`,
+                iconSize: [size, size],
+                iconAnchor: [size/2, size/2]
+            });
+        }
+
+        // --- マップ初期化 ---
         const map = L.map('map', {
             attributionControl: false
         }).setView([35, 135], 5);
@@ -112,6 +169,16 @@
                     direction: 'top',
                     offset: [0, -10]
                 });
+
+                // --- 波紋アニメーション ---
+                if (!isNaN(mag) && mag > 0) {
+                    const rippleIcon = createRippleIcon(mag);
+                    L.marker([lat, lng], {
+                        icon: rippleIcon,
+                        zIndexOffset: 500,
+                        interactive: false
+                    }).addTo(map);
+                }
             } else {
                 marker.bindTooltip('Near the center of the typhoon', {
                     permanent: true,
@@ -120,14 +187,15 @@
                 });
                 marker.bindPopup('Typhoon Center');
 
-                // Draw arrow if direction is present
                 if (dir && !isNaN(spd) && spd > 0) {
                     const angle = directionToAngle(dir);
-                    // Place arrow slightly offset from center to avoid overlap with marker
-                    const arrowLat = lat + 0.02; // about 2.2km north
+                    const arrowLat = lat - 0.05;
                     const arrowLng = lng;
                     const arrowIcon = createArrowIcon(angle);
-                    const arrowMarker = L.marker([arrowLat, arrowLng], { icon: arrowIcon, zIndexOffset: 1000 }).addTo(map);
+                    const arrowMarker = L.marker([arrowLat, arrowLng], { 
+                        icon: arrowIcon, 
+                        zIndexOffset: 1000
+                    }).addTo(map);
                     arrowMarker.bindPopup(`Movement: ${dir} ${spd} km/h`);
                 }
 
