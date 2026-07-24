@@ -286,7 +286,8 @@
                     lastTime = now;
                     for (const orbit of orbitingDots) {
                         for (const dotInfo of orbit.dots) {
-                            dotInfo.phaseDeg = (dotInfo.phaseDeg + orbit.speedDegPerSec * dt) % 360;
+                            // 北半球の反時計回り（角度を減少）
+                            dotInfo.phaseDeg = (dotInfo.phaseDeg - orbit.speedDegPerSec * dt + 360) % 360;
                             const newPos = destinationFromBearing(lat, lng, orbit.radiusMeters, dotInfo.phaseDeg);
                             dotInfo.marker.setLatLng(newPos);
                         }
