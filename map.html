@@ -64,11 +64,35 @@
         const storm = parseFloat(params.get('storm'));
         const gale = parseFloat(params.get('gale'));
         const type = params.get('type');
+        const dir = params.get('dir');   // e.g., "NNE"
+        const spd = parseFloat(params.get('spd')); // speed in km/h
 
-        // type=epicenter または type=ep → 震央、それ以外（type=ty / 未指定 等）→ 台風
         const isEpicenter = (type === 'epicenter' || type === 'ep');
 
         document.title = isEpicenter ? 'Epicenter' : 'Typhoon Wind Areas';
+
+        // direction string -> angle (degrees, 0=N, clockwise)
+        function directionToAngle(dirStr) {
+            const dirMap = {
+                'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
+                'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
+                'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+                'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5
+            };
+            return dirMap[dirStr] || 0;
+        }
+
+        function createArrowIcon(angleDeg) {
+            return L.divIcon({
+                className: 'arrow-icon',
+                html: `<svg width="32" height="32" viewBox="0 0 32 32" style="transform: rotate(${angleDeg}deg);">
+                        <polygon points="16,4 24,28 16,22 8,28" fill="#0078d4" stroke="#003d6b" stroke-width="1.5"/>
+                       </svg>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                popupAnchor: [0, -16]
+            });
+        }
 
         const map = L.map('map', {
             attributionControl: false
@@ -95,6 +119,17 @@
                     offset: [0, -10]
                 });
                 marker.bindPopup('Typhoon Center');
+
+                // Draw arrow if direction is present
+                if (dir && !isNaN(spd) && spd > 0) {
+                    const angle = directionToAngle(dir);
+                    // Place arrow slightly offset from center to avoid overlap with marker
+                    const arrowLat = lat + 0.03; // about 3.3km north
+                    const arrowLng = lng;
+                    const arrowIcon = createArrowIcon(angle);
+                    const arrowMarker = L.marker([arrowLat, arrowLng], { icon: arrowIcon }).addTo(map);
+                    arrowMarker.bindPopup(`Movement: ${dir} ${spd} km/h`);
+                }
 
                 let hasCircles = false;
                 if (!isNaN(gale) && gale > 0) {
