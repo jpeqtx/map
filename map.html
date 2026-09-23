@@ -47,7 +47,6 @@
             text-decoration: none;
         }
 
-        /* --- 波紋アニメーション用 CSS --- */
         @keyframes ripple {
             0%   { transform: scale(0.5); opacity: 0.8; }
             100% { transform: scale(2.5); opacity: 0; }
@@ -65,12 +64,10 @@
             transform-origin: center center;
         }
 
-        /* 矢印を最前面に */
         .arrow-icon {
             z-index: 1000 !important;
         }
 
-        /* --- 河川氾濫用の円形マーカー --- */
         .flood-icon {
             overflow: visible !important;
             background: transparent !important;
@@ -156,16 +153,17 @@
             document.title = 'Typhoon Wind Areas';
         }
 
-        // --- 河川氾濫レベルの定義（すべて英語） ---
+        // --- 河川氾濫レベルの定義（範囲判定 / A+B統合案） ---
         // 気象庁の警戒レベル色に準拠
-        // 100: Flooding Occurred / 90: Flood Danger Level
-        //  80: Evacuation Advisory Level / 30: Flood Advisory Level
-        const FLOOD_LEVELS = {
-            100: { en: 'FLOODING',   full: 'Flooding Occurred',         bg: '#000000', fg: '#FFFFFF', lv: 5 },
-            90:  { en: 'DANGER',     full: 'Flood Danger Level',        bg: '#9900CC', fg: '#FFFFFF', lv: 4 },
-            80:  { en: 'EVACUATION', full: 'Evacuation Advisory Level', bg: '#FF0000', fg: '#FFFFFF', lv: 3 },
-            30:  { en: 'CAUTION',    full: 'Flood Advisory Level',      bg: '#FFD700', fg: '#000000', lv: 2 }
-        };
+        // 100以上: Flooding Occurred / 90-99: Flood Danger Level
+        //  80-89: Evacuation Advisory Level / 30-79: Flood Advisory Level
+        function getFloodLevelInfo(level) {
+            if (level >= 100) return { en: 'FLOODING',   full: 'Flooding Occurred',         bg: '#000000', fg: '#FFFFFF', lv: 5 };
+            if (level >= 90)  return { en: 'DANGER',     full: 'Flood Danger Level',        bg: '#9900CC', fg: '#FFFFFF', lv: 4 };
+            if (level >= 80)  return { en: 'EVACUATION', full: 'Evacuation Advisory Level', bg: '#FF0000', fg: '#FFFFFF', lv: 3 };
+            if (level >= 30)  return { en: 'CAUTION',    full: 'Flood Advisory Level',      bg: '#FFD700', fg: '#000000', lv: 2 };
+            return { en: 'NORMAL', full: 'Normal', bg: '#FFFFFF', fg: '#000000', lv: 1 };
+        }
 
         // --- 進行方向 → 角度 ---
         function directionToAngle(dirStr) {
@@ -227,10 +225,6 @@
         }
 
         // --- 河川氾濫用の波形SVGを生成 ---
-        // 円形バッジの内部に、サイン波状の水面アニメーションを描画する
-        // - viewBox 0 0 80 80: バッジと同サイズ
-        // - 波形パス: 波長40、振幅15の疑似サイン波（Q曲線による近似）
-        // - パスは2倍の長さ（0〜120）で描画し、40単位スライドさせてシームレスループ
         function createFloodWaveSvg(fgColor) {
             const path = "M 0 45 " +
                 "Q 10 30, 20 45 " +
@@ -250,7 +244,7 @@
 
         // --- 地図上の距離から円周上の座標を計算 ---
         function destinationFromBearing(centerLat, centerLng, radiusMeters, bearingDeg) {
-            const R = 6371000; // 地球の半径(m)
+            const R = 6371000;
             const lat1 = centerLat * Math.PI / 180;
             const lng1 = centerLng * Math.PI / 180;
             const brng = bearingDeg * Math.PI / 180;
@@ -274,9 +268,6 @@
 
         if (!isNaN(lat) && !isNaN(lng)) {
             if (isEpicenter) {
-                // ===================================
-                // 震源モード
-                // ===================================
                 map.setView([lat, lng], 7);
                 const marker = L.marker([lat, lng]).addTo(map);
 
@@ -286,7 +277,6 @@
                     offset: [0, -10]
                 });
 
-                // 波紋アニメーション
                 if (!isNaN(mag) && mag > 0) {
                     const rippleIcon = createRippleIcon(mag);
                     L.marker([lat, lng], {
@@ -296,19 +286,11 @@
                     }).addTo(map);
                 }
             } else if (isFlood) {
-                // ===================================
-                // 河川氾濫モード
-                // ===================================
                 map.setView([lat, lng], 13);
 
-                // レベル情報を取得（既定: 30 = Flood Advisory Level）
-                const lvKey = FLOOD_LEVELS[floodLevel] ? floodLevel : 30;
-                const lvInfo = FLOOD_LEVELS[lvKey];
-
-                // 波形SVGを生成
+                const lvInfo = getFloodLevelInfo(floodLevel || 0);
                 const waveSvg = createFloodWaveSvg(lvInfo.fg);
 
-                // レベル色の円形マーカー（内部に波形アニメーション）
                 const floodIcon = L.divIcon({
                     className: 'flood-icon',
                     html: `<div class="flood-badge" style="
@@ -329,7 +311,6 @@
                     zIndexOffset: 800
                 }).addTo(map);
 
-                // ツールチップ（英語ラベル、常時表示）
                 floodMarker.bindTooltip(`${lvInfo.full}`, {
                     permanent: true,
                     direction: 'top',
@@ -337,19 +318,14 @@
                     className: 'flood-tooltip'
                 });
 
-                // ポップアップ（詳細情報）
                 floodMarker.bindPopup(`
                     <b>${lvInfo.full}</b><br>
                     Level: ${lvInfo.lv} (${lvInfo.en})<br>
                     Coordinates: ${lat}, ${lng}
                 `);
 
-                // 凡例を表示
                 document.getElementById('flood-legend').style.display = 'block';
             } else {
-                // ===================================
-                // 台風モード
-                // ===================================
                 map.setView([lat, lng], 7);
                 const marker = L.marker([lat, lng]).addTo(map);
 
@@ -360,7 +336,6 @@
                 });
                 marker.bindPopup('Typhoon Center');
 
-                // 進行方向の矢印
                 if (dir && !isNaN(spd) && spd > 0) {
                     const angle = directionToAngle(dir);
                     const arrowLat = lat - 0.05;
@@ -373,7 +348,6 @@
                     arrowMarker.bindPopup(`Movement: ${dir} ${spd} km/h`);
                 }
 
-                // --- 静的円（正確な暴風域・強風域） ---
                 let hasCircles = false;
                 if (!isNaN(gale) && gale > 0) {
                     L.circle([lat, lng], {
@@ -397,7 +371,6 @@
                     document.getElementById('legend').style.display = 'block';
                 }
 
-                // --- 光点周回アニメーション ---
                 const orbitingDots = [];
 
                 function createOrbitingDots(radiusKm, color, count, speedDegPerSec, offsetPhaseDeg) {
@@ -421,25 +394,21 @@
                     return { dots, radiusMeters, speedDegPerSec };
                 }
 
-                // 強風域の光点（オレンジ、4個、15度/秒）
                 if (!isNaN(gale) && gale > 0) {
                     const galeOrbit = createOrbitingDots(gale, 'orange', 4, 15, 0);
                     orbitingDots.push(galeOrbit);
                 }
-                // 暴風域の光点（赤、3個、20度/秒）
                 if (!isNaN(storm) && storm > 0) {
                     const stormOrbit = createOrbitingDots(storm, 'red', 3, 20, 60);
                     orbitingDots.push(stormOrbit);
                 }
 
-                // アニメーションループ
                 let lastTime = performance.now();
                 function animateOrbits(now) {
-                    const dt = (now - lastTime) / 1000; // 秒
+                    const dt = (now - lastTime) / 1000;
                     lastTime = now;
                     for (const orbit of orbitingDots) {
                         for (const dotInfo of orbit.dots) {
-                            // 北半球の反時計回り（角度を減少）
                             dotInfo.phaseDeg = (dotInfo.phaseDeg - orbit.speedDegPerSec * dt + 360) % 360;
                             const newPos = destinationFromBearing(lat, lng, orbit.radiusMeters, dotInfo.phaseDeg);
                             dotInfo.marker.setLatLng(newPos);
