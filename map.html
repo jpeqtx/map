@@ -69,6 +69,37 @@
         .arrow-icon {
             z-index: 1000 !important;
         }
+
+        /* --- 河川氾濫用の円形マーカー --- */
+        .flood-icon {
+            overflow: visible !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        .flood-badge {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 11px;
+            text-align: center;
+            line-height: 1.1;
+            border: 3px solid #FFFFFF;
+            box-shadow: 0 0 10px rgba(0,0,0,0.6);
+            padding: 4px;
+            box-sizing: border-box;
+            word-break: break-word;
+        }
+        .flood-tooltip {
+            font-size: 13px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.95);
+            border: 2px solid #333;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
     </style>
 </head>
 <body>
@@ -80,6 +111,13 @@
         <div class="legend-item"><div class="legend-color" style="background:rgba(255,0,0,0.5);"></div> Storm Area</div>
         <div class="legend-item"><div class="legend-color" style="background:rgba(255,165,0,0.4);"></div> Gale Area</div>
     </div>
+    <div class="legend" id="flood-legend" style="display:none;">
+        <div style="font-weight:bold;margin-bottom:4px;">River Flood Level</div>
+        <div class="legend-item"><div class="legend-color" style="background:#000000;"></div> Lv5 Flooding</div>
+        <div class="legend-item"><div class="legend-color" style="background:#9900CC;"></div> Lv4 Danger</div>
+        <div class="legend-item"><div class="legend-color" style="background:#FF0000;"></div> Lv3 Evacuation</div>
+        <div class="legend-item"><div class="legend-color" style="background:#FFD700;"></div> Lv2 Caution</div>
+    </div>
     <script>
         const params = new URLSearchParams(window.location.search);
         const lat = parseFloat(params.get('lat'));
@@ -90,10 +128,28 @@
         const dir = params.get('dir');
         const spd = parseFloat(params.get('spd'));
         const mag = parseFloat(params.get('mag'));
+        const floodLevel = parseInt(params.get('level'));
 
         const isEpicenter = (type === 'epicenter' || type === 'ep');
+        const isFlood = (type === 'flood');
 
-        document.title = isEpicenter ? 'Epicenter' : 'Typhoon Wind Areas';
+        if (isEpicenter) {
+            document.title = 'Epicenter';
+        } else if (isFlood) {
+            document.title = 'River Flood';
+        } else {
+            document.title = 'Typhoon Wind Areas';
+        }
+
+        // --- 河川氾濫レベルの定義 ---
+        // 気象庁の警戒レベル色に準拠
+        // 100: 氾濫発生水位 / 90: 氾濫危険水位 / 80: 避難判断水位 / 30: 氾濫注意水位
+        const FLOOD_LEVELS = {
+            100: { en: 'FLOODING',   jp: '氾濫発生水位', bg: '#000000', fg: '#FFFFFF', lv: 5 },
+            90:  { en: 'DANGER',     jp: '氾濫危険水位', bg: '#9900CC', fg: '#FFFFFF', lv: 4 },
+            80:  { en: 'EVACUATION', jp: '避難判断水位', bg: '#FF0000', fg: '#FFFFFF', lv: 3 },
+            30:  { en: 'CAUTION',    jp: '氾濫注意水位', bg: '#FFD700', fg: '#000000', lv: 2 }
+        };
 
         // --- 進行方向 → 角度 ---
         function directionToAngle(dirStr) {
@@ -179,10 +235,13 @@
         }).addTo(map);
 
         if (!isNaN(lat) && !isNaN(lng)) {
-            map.setView([lat, lng], 7);
-            const marker = L.marker([lat, lng]).addTo(map);
-
             if (isEpicenter) {
+                // ===================================
+                // 震源モード
+                // ===================================
+                map.setView([lat, lng], 7);
+                const marker = L.marker([lat, lng]).addTo(map);
+
                 marker.bindTooltip('Epicenter', {
                     permanent: true,
                     direction: 'top',
@@ -198,8 +257,58 @@
                         interactive: false
                     }).addTo(map);
                 }
+            } else if (isFlood) {
+                // ===================================
+                // 河川氾濫モード
+                // ===================================
+                map.setView([lat, lng], 13);
+
+                // レベル情報を取得（既定: 30 = 氾濫注意水位）
+                const lvKey = FLOOD_LEVELS[floodLevel] ? floodLevel : 30;
+                const lvInfo = FLOOD_LEVELS[lvKey];
+
+                // レベル色の円形マーカー
+                const floodIcon = L.divIcon({
+                    className: 'flood-icon',
+                    html: `<div class="flood-badge" style="
+                        width: 80px;
+                        height: 80px;
+                        background: ${lvInfo.bg};
+                        color: ${lvInfo.fg};
+                    ">${lvInfo.en}</div>`,
+                    iconSize: [80, 80],
+                    iconAnchor: [40, 40]
+                });
+
+                const floodMarker = L.marker([lat, lng], {
+                    icon: floodIcon,
+                    zIndexOffset: 800
+                }).addTo(map);
+
+                // ツールチップ（日本語ラベル、常時表示）
+                floodMarker.bindTooltip(`${lvInfo.jp}`, {
+                    permanent: true,
+                    direction: 'top',
+                    offset: [0, -45],
+                    className: 'flood-tooltip'
+                });
+
+                // ポップアップ（詳細情報）
+                floodMarker.bindPopup(`
+                    <b>${lvInfo.jp}</b><br>
+                    Level: ${lvInfo.lv} (${lvInfo.en})<br>
+                    Coordinates: ${lat}, ${lng}
+                `);
+
+                // 凡例を表示
+                document.getElementById('flood-legend').style.display = 'block';
             } else {
-                // --- 台風モード ---
+                // ===================================
+                // 台風モード
+                // ===================================
+                map.setView([lat, lng], 7);
+                const marker = L.marker([lat, lng]).addTo(map);
+
                 marker.bindTooltip('Near the center of the typhoon', {
                     permanent: true,
                     direction: 'top',
