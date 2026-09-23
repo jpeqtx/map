@@ -141,14 +141,15 @@
             document.title = 'Typhoon Wind Areas';
         }
 
-        // --- 河川氾濫レベルの定義 ---
+        // --- 河川氾濫レベルの定義（すべて英語） ---
         // 気象庁の警戒レベル色に準拠
-        // 100: 氾濫発生水位 / 90: 氾濫危険水位 / 80: 避難判断水位 / 30: 氾濫注意水位
+        // 100: Flooding Occurred / 90: Flood Danger Level
+        //  80: Evacuation Advisory Level / 30: Flood Advisory Level
         const FLOOD_LEVELS = {
-            100: { en: 'FLOODING',   jp: '氾濫発生水位', bg: '#000000', fg: '#FFFFFF', lv: 5 },
-            90:  { en: 'DANGER',     jp: '氾濫危険水位', bg: '#9900CC', fg: '#FFFFFF', lv: 4 },
-            80:  { en: 'EVACUATION', jp: '避難判断水位', bg: '#FF0000', fg: '#FFFFFF', lv: 3 },
-            30:  { en: 'CAUTION',    jp: '氾濫注意水位', bg: '#FFD700', fg: '#000000', lv: 2 }
+            100: { en: 'FLOODING',   full: 'Flooding Occurred',         bg: '#000000', fg: '#FFFFFF', lv: 5 },
+            90:  { en: 'DANGER',     full: 'Flood Danger Level',        bg: '#9900CC', fg: '#FFFFFF', lv: 4 },
+            80:  { en: 'EVACUATION', full: 'Evacuation Advisory Level', bg: '#FF0000', fg: '#FFFFFF', lv: 3 },
+            30:  { en: 'CAUTION',    full: 'Flood Advisory Level',      bg: '#FFD700', fg: '#000000', lv: 2 }
         };
 
         // --- 進行方向 → 角度 ---
@@ -263,7 +264,7 @@
                 // ===================================
                 map.setView([lat, lng], 13);
 
-                // レベル情報を取得（既定: 30 = 氾濫注意水位）
+                // レベル情報を取得（既定: 30 = Flood Advisory Level）
                 const lvKey = FLOOD_LEVELS[floodLevel] ? floodLevel : 30;
                 const lvInfo = FLOOD_LEVELS[lvKey];
 
@@ -285,8 +286,8 @@
                     zIndexOffset: 800
                 }).addTo(map);
 
-                // ツールチップ（日本語ラベル、常時表示）
-                floodMarker.bindTooltip(`${lvInfo.jp}`, {
+                // ツールチップ（英語ラベル、常時表示）
+                floodMarker.bindTooltip(`${lvInfo.full}`, {
                     permanent: true,
                     direction: 'top',
                     offset: [0, -45],
@@ -295,7 +296,7 @@
 
                 // ポップアップ（詳細情報）
                 floodMarker.bindPopup(`
-                    <b>${lvInfo.jp}</b><br>
+                    <b>${lvInfo.full}</b><br>
                     Level: ${lvInfo.lv} (${lvInfo.en})<br>
                     Coordinates: ${lat}, ${lng}
                 `);
