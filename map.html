@@ -77,6 +77,8 @@
             border: none !important;
         }
         .flood-badge {
+            position: relative;
+            overflow: hidden;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -91,6 +93,19 @@
             padding: 4px;
             box-sizing: border-box;
             word-break: break-word;
+        }
+        .flood-badge .wave-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .flood-badge .badge-text {
+            position: relative;
+            z-index: 1;
         }
         .flood-tooltip {
             font-size: 13px;
@@ -211,6 +226,28 @@
             });
         }
 
+        // --- 河川氾濫用の波形SVGを生成 ---
+        // 円形バッジの内部に、サイン波状の水面アニメーションを描画する
+        // - viewBox 0 0 80 80: バッジと同サイズ
+        // - 波形パス: 波長40、振幅15の疑似サイン波（Q曲線による近似）
+        // - パスは2倍の長さ（0〜120）で描画し、40単位スライドさせてシームレスループ
+        function createFloodWaveSvg(fgColor) {
+            const path = "M 0 45 " +
+                "Q 10 30, 20 45 " +
+                "Q 30 60, 40 45 " +
+                "Q 50 30, 60 45 " +
+                "Q 70 60, 80 45 " +
+                "Q 90 30, 100 45 " +
+                "Q 110 60, 120 45 " +
+                "L 120 80 L 0 80 Z";
+            return `<svg class="wave-svg" viewBox="0 0 80 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="${path}" fill="${fgColor}" fill-opacity="0.30">
+                    <animateTransform attributeName="transform" type="translate"
+                        from="0 0" to="-40 0" dur="3s" repeatCount="indefinite"/>
+                </path>
+            </svg>`;
+        }
+
         // --- 地図上の距離から円周上の座標を計算 ---
         function destinationFromBearing(centerLat, centerLng, radiusMeters, bearingDeg) {
             const R = 6371000; // 地球の半径(m)
@@ -268,7 +305,10 @@
                 const lvKey = FLOOD_LEVELS[floodLevel] ? floodLevel : 30;
                 const lvInfo = FLOOD_LEVELS[lvKey];
 
-                // レベル色の円形マーカー
+                // 波形SVGを生成
+                const waveSvg = createFloodWaveSvg(lvInfo.fg);
+
+                // レベル色の円形マーカー（内部に波形アニメーション）
                 const floodIcon = L.divIcon({
                     className: 'flood-icon',
                     html: `<div class="flood-badge" style="
@@ -276,7 +316,10 @@
                         height: 80px;
                         background: ${lvInfo.bg};
                         color: ${lvInfo.fg};
-                    ">${lvInfo.en}</div>`,
+                    ">
+                        ${waveSvg}
+                        <span class="badge-text">${lvInfo.en}</span>
+                    </div>`,
                     iconSize: [80, 80],
                     iconAnchor: [40, 40]
                 });
